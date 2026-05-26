@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Sync Timers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080810;
+      --card: rgba(255,255,255,0.03);
+      --border: rgba(255,255,255,0.08);
+      --orange: #FF6B35;
+      --gold: #FFD166;
+      --green: #4AFF91;
+      --text: #fff;
+      --muted: #555;
+    }
+
+    body {
+      background: var(--bg);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      color: var(--text);
+    }
+
+    /* ── Background ── */
+    .bg-radial {
+      position: fixed; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse at 50% -10%, #1e0a35 0%, #080810 65%);
+      pointer-events: none;
+    }
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(255,107,53,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,107,53,.04) 1px, transparent 1px);
+      background-size: 44px 44px;
+      pointer-events: none;
+    }
+
+    /* ── Layout ── */
+    .wrap {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 430px;
+      padding: 0 16px 40px;
+      display: flex; flex-direction: column; gap: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 10;
+      padding: 28px 4px 16px;
+    }
+    .hdr-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 12px var(--orange);
+      flex-shrink: 0;
+    }
+    .hdr-title {
+      flex: 1;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px; letter-spacing: .2em;
+    }
+    .live-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 20px; padding: 4px 12px;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    .live-dot.on { background: var(--green); animation: blink 1.4s ease infinite; }
+    .live-label { font-size: 9px; letter-spacing: .15em; color: #aaa; }
+
+    /* ── Cards ── */
+    .timers { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 20px 22px;
+      animation: fadeUp .4s ease both;
+      backdrop-filter: blur(8px);
+    }
+    .card:nth-child(2) { animation-delay: .08s; }
+    .card:nth-child(3) { animation-delay: .16s; }
+
+    /* card top row */
+    .card-head {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 16px;
+    }
+    .card-idx {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 30px; color: rgba(255,255,255,.12); line-height: 1;
+    }
+    .card-name {
+      flex: 1;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: .15em;
+      color: rgba(255,255,255,.7);
+    }
+    .card-total {
+      font-size: 10px; color: var(--muted); letter-spacing: .1em;
+      background: rgba(255,255,255,.05);
+      padding: 3px 10px; border-radius: 10px;
+    }
+
+    /* circle */
+    .circle-wrap {
+      position: relative;
+      width: 130px; height: 130px;
+      margin: 0 auto 16px;
+    }
+    .circle-wrap svg { display: block; }
+    .circle-time {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      text-align: center;
+    }
+    .circle-time .time {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 21px; letter-spacing: .04em;
+      display: block;
+      transition: color .3s;
+    }
+    .circle-time .done-lbl {
+      display: none;
+      font-size: 7px; letter-spacing: .15em;
+      color: var(--green); margin-top: 2px;
+    }
+
+    /* bar */
+    .bar-track {
+      height: 3px; background: rgba(255,255,255,.06);
+      border-radius: 2px; overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%; border-radius: 2px;
+      width: 100%;
+      transition: width .9s ease;
+    }
+
+    /* ── Controls ── */
+    .controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+    #btn-start {
+      width: 100%;
+      background: linear-gradient(135deg, #FF6B35, #e63000);
+      border: none; border-radius: 14px;
+      color: #fff;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 20px; letter-spacing: .2em;
+      padding: 18px 0;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      box-shadow: 0 4px 32px rgba(255,107,53,.4);
+      transition: transform .12s, box-shadow .12s;
+    }
+    #btn-start:active { transform: scale(.97); box-shadow: 0 2px 16px rgba(255,107,53,.3); }
+
+    #btn-reset {
+      width: 100%;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 14px;
+      color: #888;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px; letter-spacing: .08em;
+      padding: 14px 0;
+      cursor: pointer;
+      display: none;
+      transition: background .2s;
+    }
+    #btn-reset:active { background: rgba(255,255,255,.09); }
+
+    .note {
+      font-size: 11px; color: var(--muted);
+      letter-spacing: .05em; text-align: center;
+    }
+    .note.success { color: var(--green); animation: blink 2s ease infinite; }
+
+    /* ── Setup overlay ── */
+    #setup-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(8,8,16,.96);
+      backdrop-filter: blur(12px);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 24px; gap: 20px;
+      text-align: center;
+    }
+    #setup-overlay.hidden { display: none; }
+    .setup-icon { font-size: 44px; margin-bottom: 4px; }
+    .setup-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 26px; letter-spacing: .15em; color: var(--orange);
+    }
+    .setup-desc {
+      font-size: 12px; color: #888; line-height: 1.8;
+      max-width: 340px;
+    }
+    .setup-desc a { color: var(--orange); }
+    .setup-input {
+      width: 100%; max-width: 380px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      color: #fff; font-family: 'Space Mono', monospace; font-size: 11px;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .setup-input:focus { border-color: var(--orange); }
+    .setup-btn {
+      width: 100%; max-width: 380px;
+      background: linear-gradient(135deg, #FF6B35, #e63000);
+      border: none; border-radius: 12px;
+      color: #fff; font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: .15em;
+      padding: 16px 0; cursor: pointer;
+      box-shadow: 0 4px 24px rgba(255,107,53,.35);
+    }
+    .setup-err { font-size: 11px; color: #ff5555; min-height: 16px; }
+    .setup-skip {
+      font-size: 10px; color: #444; cursor: pointer;
+      text-decoration: underline; letter-spacing: .05em;
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative; z-index: 1;
+      font-size: 9px; color: #2a2a2a;
+      letter-spacing: .08em; text-align: center;
+      padding: 0 16px 16px; margin-top: -8px;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes blink {
+      0%,100% { opacity: 1; } 50% { opacity: .35; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-radial"></div>
+<div class="bg-grid"></div>
+
+<!-- ════════ SETUP OVERLAY ════════ -->
+<div id="setup-overlay">
+  <div class="setup-icon">🔥</div>
+  <div class="setup-title">Configurar Firebase</div>
+  <div class="setup-desc">
+    Cole abaixo o objeto <strong style="color:#fff">firebaseConfig</strong> do seu projeto.<br>
+    Crie um projeto gratuito em <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a>
+    → Adicionar app (Web) → copiar o config.<br><br>
+    Não esqueça de ativar o <strong style="color:#fff">Realtime Database</strong> no projeto<br>
+    e definir as regras como <code style="color:var(--gold)">".read": true, ".write": true</code>.
+  </div>
+  <textarea id="cfg-input" class="setup-input" rows="8" placeholder='{
+  "apiKey": "...",
+  "authDomain": "...",
+  "databaseURL": "https://SEU-PROJETO.firebaseio.com",
+  "projectId": "...",
+  "storageBucket": "...",
+  "messagingSenderId": "...",
+  "appId": "..."
+}'></textarea>
+  <div id="cfg-err" class="setup-err"></div>
+  <button class="setup-btn" onclick="applyConfig()">CONECTAR</button>
+  <span class="setup-skip" onclick="skipSetup()">Já configurei antes — usar config salvo</span>
+</div>
+
+<!-- ════════ MAIN UI ════════ -->
+<div class="wrap">
+  <header>
+    <div class="hdr-dot"></div>
+    <span class="hdr-title">SYNC TIMERS</span>
+    <div class="live-chip">
+      <div class="live-dot" id="live-dot"></div>
+      <span class="live-label" id="live-label">PARADO</span>
+    </div>
+  </header>
+
+  <div class="timers" id="timers-container">
+    <!-- cards gerados via JS -->
+  </div>
+
+  <div class="controls">
+    <button id="btn-start" onclick="startTimers()">▶&nbsp; INICIAR TODOS</button>
+    <button id="btn-reset" onclick="resetTimers()">↺ &nbsp;REINICIAR</button>
+    <p class="note" id="note"></p>
+  </div>
+</div>
+
+<footer>Sincronizado via Firebase Realtime Database • Atualiza em tempo real</footer>
+
+<!-- Firebase SDKs (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<script>
+// ─────────────────────────────────────────
+//  TIMER CONFIG
+// ─────────────────────────────────────────
+const TIMERS = [
+  { id: 't1', label: 'TIMER 1', duration: 3600, color: '#FF6B35' },
+  { id: 't2', label: 'TIMER 2', duration: 3600, color: '#FF6B35' },
+  { id: 't3', label: 'RÁPIDO',  duration: 1200, color: '#FFD166' },
+];
+const DB_PATH = 'sync-timers/state';
+const STORAGE_KEY = 'syncTimers_fbConfig';
+
+// ─────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────
+let startedAt = null;   // Unix ms from Firebase
+let tickInterval = null;
+let dbRef = null;
+
+// ─────────────────────────────────────────
+//  SETUP OVERLAY
+// ─────────────────────────────────────────
+function applyConfig() {
+  const raw = document.getElementById('cfg-input').value.trim();
+  const errEl = document.getElementById('cfg-err');
+  errEl.textContent = '';
+
+  let cfg;
+  try {
+    cfg = JSON.parse(raw);
+  } catch {
+    errEl.textContent = '❌ JSON inválido. Verifique o formato.';
+    return;
+  }
+  if (!cfg.databaseURL) {
+    errEl.textContent = '❌ Campo "databaseURL" ausente. Ative o Realtime Database no Firebase.';
+    return;
+  }
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  initFirebase(cfg);
+}
+
+function skipSetup() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) {
+    document.getElementById('cfg-err').textContent = '❌ Nenhum config salvo encontrado.';
+    return;
+  }
+  initFirebase(JSON.parse(saved));
+}
+
+function initFirebase(cfg) {
+  try {
+    // Avoid duplicate app
+    if (firebase.apps.length) {
+      firebase.apps.forEach(a => a.delete());
+    }
+    firebase.initializeApp(cfg);
+    dbRef = firebase.database().ref(DB_PATH);
+    document.getElementById('setup-overlay').classList.add('hidden');
+    listenDB();
+  } catch (e) {
+    document.getElementById('cfg-err').textContent = '❌ Erro ao conectar: ' + e.message;
+  }
+}
+
+// Auto-load saved config
+window.addEventListener('DOMContentLoaded', () => {
+  buildCards();
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try {
+      initFirebase(JSON.parse(saved));
+    } catch {}
+  }
+});
+
+// ─────────────────────────────────────────
+//  BUILD CARDS
+// ─────────────────────────────────────────
+function buildCards() {
+  const container = document.getElementById('timers-container');
+  container.innerHTML = '';
+  TIMERS.forEach((t, i) => {
+    const circ = 2 * Math.PI * 54;
+    container.innerHTML += `
+      <div class="card" id="card-${t.id}">
+        <div class="card-head">
+          <span class="card-idx">${String(i+1).padStart(2,'0')}</span>
+          <span class="card-name">${t.label}</span>
+          <span class="card-total">${t.duration === 3600 ? '1h' : '20min'}</span>
+        </div>
+        <div class="circle-wrap">
+          <svg width="130" height="130" viewBox="0 0 130 130">
+            <circle cx="65" cy="65" r="54" fill="none"
+              stroke="rgba(255,255,255,0.07)" stroke-width="6"/>
+            <circle id="arc-${t.id}" cx="65" cy="65" r="54" fill="none"
+              stroke="${t.color}" stroke-width="6" stroke-linecap="round"
+              stroke-dasharray="${circ} ${circ}"
+              transform="rotate(-90 65 65)"
+              style="transition: stroke-dasharray .85s ease, stroke .3s;"/>
+            <circle id="dot-${t.id}" cx="65" cy="${65 - 54}" r="5"
+              fill="${t.color}"
+              style="filter: drop-shadow(0 0 6px ${t.color}); display:none;"/>
+          </svg>
+          <div class="circle-time">
+            <span class="time" id="time-${t.id}" style="color:${t.color}; filter: drop-shadow(0 0 8px ${t.color}88);">
+              ${t.duration === 3600 ? '01:00:00' : '00:20:00'}
+            </span>
+            <span class="done-lbl" id="done-${t.id}">CONCLUÍDO</span>
+          </div>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" id="bar-${t.id}"
+            style="background: linear-gradient(90deg,${t.color}88,${t.color}); box-shadow: 0 0 8px ${t.color}60;">
+          </div>
+        </div>
+      </div>`;
+  });
+}
+
+// ─────────────────────────────────────────
+//  FIREBASE LISTENERS
+// ─────────────────────────────────────────
+function listenDB() {
+  dbRef.on('value', snap => {
+    const data = snap.val();
+    startedAt = data?.startedAt || null;
+    syncUI();
+  });
+}
+
+// ─────────────────────────────────────────
+//  ACTIONS
+// ─────────────────────────────────────────
+function startTimers() {
+  if (!dbRef) { alert('Firebase não conectado.'); return; }
+  dbRef.set({ startedAt: firebase.database.ServerValue.TIMESTAMP });
+}
+
+function resetTimers() {
+  if (!dbRef) return;
+  dbRef.set({ startedAt: null });
+}
+
+// ─────────────────────────────────────────
+//  UI SYNC
+// ─────────────────────────────────────────
+function syncUI() {
+  clearInterval(tickInterval);
+  const btnStart = document.getElementById('btn-start');
+  const btnReset = document.getElementById('btn-reset');
+  const liveDot  = document.getElementById('live-dot');
+  const liveLabel= document.getElementById('live-label');
+
+  if (startedAt) {
+    btnStart.style.display = 'none';
+    btnReset.style.display = 'block';
+    liveDot.classList.add('on');
+    liveLabel.textContent = 'AO VIVO';
+    tick();
+    tickInterval = setInterval(tick, 500);
+  } else {
+    btnStart.style.display = 'flex';
+    btnReset.style.display = 'none';
+    liveDot.classList.remove('on');
+    liveLabel.textContent = 'PARADO';
+    document.getElementById('note').textContent = '';
+    TIMERS.forEach(t => renderTimer(t, t.duration));
+  }
+}
+
+function tick() {
+  if (!startedAt) return;
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+  let allDone = true;
+  TIMERS.forEach(t => {
+    const rem = Math.max(0, t.duration - elapsed);
+    renderTimer(t, rem);
+    if (rem > 0) allDone = false;
+  });
+  const noteEl = document.getElementById('note');
+  if (allDone) {
+    noteEl.textContent = '🎉 Todos os timers concluídos!';
+    noteEl.classList.add('success');
+    clearInterval(tickInterval);
+  } else {
+    noteEl.textContent = '';
+    noteEl.classList.remove('success');
+  }
+}
+
+// ─────────────────────────────────────────
+//  RENDER SINGLE TIMER
+// ─────────────────────────────────────────
+const circ = 2 * Math.PI * 54;
+
+function renderTimer(t, remaining) {
+  const progress = Math.max(0, Math.min(1, remaining / t.duration));
+  const done = remaining === 0 && startedAt;
+  const color = done ? '#4AFF91' : t.color;
+  const dash  = circ * progress;
+
+  // time text
+  const timeEl = document.getElementById('time-' + t.id);
+  const doneEl = document.getElementById('done-' + t.id);
+  if (done) {
+    timeEl.textContent = '✓';
+    timeEl.style.color = color;
+    timeEl.style.filter = `drop-shadow(0 0 8px #4AFF9180)`;
+    doneEl.style.display = 'block';
+  } else {
+    timeEl.textContent = fmt(remaining);
+    timeEl.style.color = color;
+    timeEl.style.filter = `drop-shadow(0 0 8px ${t.color}88)`;
+    doneEl.style.display = 'none';
+  }
+
+  // arc
+  const arc = document.getElementById('arc-' + t.id);
+  arc.setAttribute('stroke-dasharray', `${dash} ${circ}`);
+  arc.setAttribute('stroke', color);
+
+  // glow dot
+  const dotEl = document.getElementById('dot-' + t.id);
+  if (startedAt && progress > 0.005) {
+    const angle = progress * 2 * Math.PI - Math.PI / 2;
+    const cx = 65 + 54 * Math.cos(angle);
+    const cy = 65 + 54 * Math.sin(angle);
+    dotEl.setAttribute('cx', cx);
+    dotEl.setAttribute('cy', cy);
+    dotEl.setAttribute('fill', color);
+    dotEl.style.filter = `drop-shadow(0 0 6px ${color})`;
+    dotEl.style.display = 'block';
+  } else {
+    dotEl.style.display = 'none';
+  }
+
+  // bar
+  const bar = document.getElementById('bar-' + t.id);
+  bar.style.width = (progress * 100) + '%';
+  if (done) {
+    bar.style.background = '#4AFF91';
+    bar.style.boxShadow = '0 0 8px #4AFF9160';
+  } else {
+    bar.style.background = `linear-gradient(90deg, ${t.color}88, ${t.color})`;
+    bar.style.boxShadow = `0 0 8px ${t.color}60`;
+  }
+}
+
+function fmt(s) {
+  if (s <= 0) return '00:00:00';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return `${p(h)}:${p(m)}:${p(ss)}`;
+}
+function p(n) { return String(n).padStart(2,'0'); }
+</script>
+</body>
+</html>
